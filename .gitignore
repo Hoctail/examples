@@ -1,0 +1,5 @@
+*~
+.env
+*.lock
+.bundle.mini.js
+node_modules
