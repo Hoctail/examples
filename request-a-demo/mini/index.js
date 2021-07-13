@@ -1,7 +1,7 @@
 import { plugin, plugins, typePlugin, cssWrapper } from '@hoc/plugins-core'
 import { formInputParams, createSelectItemColoredText } from '@hoc/components'
-import * as EmailValidator from 'email-validator'
-import { rootModel } from '@hoc/models'
+import EmailValidator from 'email-validator'
+import { rootModel, RecordSafeReference } from '@hoc/models'
 
 const {
   List,
@@ -9,41 +9,50 @@ const {
   CustomFormContent,
   Button,
   Input,
+  TextArea,
   InputSelect,
 } = plugins
 
 export default plugin('RequestADemo', {
+  submittedRecord: RecordSafeReference,
   snapshot: typePlugin(CustomForm, p => p.create({
+    title: 'Request a demo',
     formContent: CustomFormContent.create({
       // add wrapper around scroll area as scroller doesn't respect paddings
       outerCss: cssWrapper``,
-      editingRecord: null,
+      innerCss: cssWrapper`width: 18rem;`,
       fields: {
 	      firstName: {
+          required: true,
           displayName: 'First Name',
           input: Input.create({
             ...formInputParams(),
-            events: {
-              onFocus: 'RequestADemo.InputFocused',
-            },
+            autoFocus: true,
           }),
         },
 	      lastName: {
+          required: true,
           displayName: 'Last Name',
           input: Input.create({
             ...formInputParams(),
+            autoFocus: false,
           }),
         },	
 	      email: {
+          required: true,
           displayName: 'Email',
           input: Input.create({
-              ...formInputParams(),
+            ...formInputParams(),
+            autoFocus: false,
           }),
         },
-	      name: {
-          displayName: 'App name',
-          input: Input.create({
+	      about: {
+          required: true,
+          displayName: 'About',
+          input: TextArea.create({
             ...formInputParams(),
+            autoFocus: false,
+            rows: 4,
           }),
         },
         interestedIn: {
@@ -51,7 +60,7 @@ export default plugin('RequestADemo', {
           input: InputSelect.create({
             width: '10rem',
             items: [
-              createSelectItemColoredText('', null, {}, {
+              createSelectItemColoredText('Select an option', null, { bgcolor: 'red' }, {
                 events: {
                   onClick: 'RequestADemo.HandleSelectInputItem',
                 },
@@ -93,8 +102,7 @@ export default plugin('RequestADemo', {
 	            opacity: 0.9;
 	          `}
 	        `,
-          name: 'OkBtn',
-          testid: 'OkBtn',
+          name: 'Submit',
           disabled: true,
           events: {
             onClick: 'RequestADemo.FormOk',
@@ -105,32 +113,49 @@ export default plugin('RequestADemo', {
   })),
 }).reactions(self => [
   [
+    () => {
+      if(self.table) return self.table.records.size
+    },
+    () => self.setSubmittedRecord(),
+    'setSubmittedRecord',
+  ], [
+    () => self.snapshot.error,
+    error => self.enableOkButton(!error),
+    'enableOkButton',
+  ], [
     () => self.formContent.currentDataStr,
-    currentStr => {
-      self.enableOkButton(
-        !self.isDusplicateAppName &&
-        self.formValue('name').length &&
-        currentStr !== self.formContent.prevDataStr,
+    () => {
+      // save in local storage what user entered
+      rootModel().system.schema.setMeta(
+        'formData', self.formContent.data, 'local',
       )
     },
-    'enableOkButton',
+    'save formData locally',
   ],
 ]).views(self => ({
   get formContent () {
     return self.snapshot.formContent
   },
-  get validated () {
-    const { firstName, lastName } = self.snapshot.formContent.data
-    return {
-      firstName: firstName.length > 1 ? true : 'Too short',
-      lastName: lastName.length > 1 ? true : 'Too short',      
-      email: EmailValidator.validate("test@email.com"),
-    }
-  }
+  get table () {
+    return rootModel().system.schema.table('Demo Requests')
+  },
 })).actions(self => ({
   afterCreate () {
-    self.snapshot.dialog.setTitle('Request a demo')
+    //self.status = rootModel().system.schema.setDefaultMeta('status', false, 'local').cell
+    // console.log(self.status.value())
+
     self.snapshot.dialog.closeButton.setVisible(false)
+    self.loadSavedData()
+    self.snapshot.setErrorHandler('email', inputMethod => {
+      if (!EmailValidator.validate(inputMethod.inputValue)) {
+        return 'is incorrect'
+      }
+    })
+    self.snapshot.setErrorHandler('interestedIn', inputMethod => {
+      if (inputMethod.inputValue === 'Select an option') {
+        return 'not selected'
+      }
+    })
     self.snapshot.show()
   },
   enableOkButton (enable) {
@@ -147,14 +172,45 @@ export default plugin('RequestADemo', {
     const tooltip = rootModel().getController('TooltipError')
     tooltip.hide()
   },
+  loadSavedData () {
+    // since we save data on submit, here we populate form with
+    // already submitted data so user can see it when open again
+    const formData = rootModel().system.schema.getMeta('formData', 'local')
+    if (formData) {
+      self.formContent.setFormData(formData)
+    }
+  },
+  saveData () {
+    const { data } = self.formContent
+    if (!self.table) {
+      throw new Error("Didn't locate table: 'Demo Requests'")
+    }
+    self.table.insertRecordData(data)
+  },
+  setSubmittedRecord () {
+    const table = self.table
+    if (table && table.records.size > 0) {
+      if (!self.submittedRecord) {
+        self.submittedRecord = Array.from(table.records.values())[0]
+      } else if (table.records.size > 1) {
+        throw new Error('Not allowed to have more than one record')
+      }
+    }
+  },
 })).events({
   HandleSelectInputItem: ({ data }) => {
     InputSelect.self(data).handleItemClick(data)
   },
-  InputFocused: ({ self, data }) => {
-    console.log(data.inputValue)
-  },
-  FormOk: ({ self }) => {
-
+  FormOk: ({ self, data, errHandlers }) => {
+    self.saveData()
+    //const { schema } = rootModel().system
+    //const status = schema.getMeta('status', 'local')
+    // form data returned by getter
+    //const formData = self.formContent.data
+    //schema.setMeta('status', true, 'local')
+    //console.log(formData)
+    // something went wrong
+    
+    // errHandlers.push([() => self.showError(data, self.status.value())])
   },
 })
