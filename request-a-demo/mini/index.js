@@ -113,13 +113,22 @@ export default plugin('RequestADemo', {
   })),
 }).reactions(self => [
   [
-    () => {
-      if(self.table) return self.table.records.size
+    () => self.submittedRecord ? self.submittedRecord.column('status').value : null,
+    status => {
+      if (status != null) {
+        rootModel().system.schema.setMeta('status', status)
+        self.handleStatus()
+      }
     },
-    () => self.setSubmittedRecord(),
+    'status'
+  ], [
+    () => self.table ? self.table.records.size : 0,
+    size => {
+      if (size > 0) self.setSubmittedRecord()
+    },
     'setSubmittedRecord',
   ], [
-    () => self.snapshot.error,
+    () => self.form.error,
     error => self.enableOkButton(!error),
     'enableOkButton',
   ], [
@@ -133,33 +142,45 @@ export default plugin('RequestADemo', {
     'save formData locally',
   ],
 ]).views(self => ({
+  get form () {
+    return self.snapshot
+  },
   get formContent () {
-    return self.snapshot.formContent
+    return self.form.formContent
   },
   get table () {
     return rootModel().system.schema.table('Demo Requests')
   },
 })).actions(self => ({
   afterCreate () {
-    //self.status = rootModel().system.schema.setDefaultMeta('status', false, 'local').cell
-    // console.log(self.status.value())
-
-    self.snapshot.dialog.closeButton.setVisible(false)
+    self.form.dialog.closeButton.setVisible(false)
+    self.handleStatus()
     self.loadSavedData()
-    self.snapshot.setErrorHandler('email', inputMethod => {
+    self.form.setErrorHandler('email', inputMethod => {
       if (!EmailValidator.validate(inputMethod.inputValue)) {
         return 'is incorrect'
       }
     })
-    self.snapshot.setErrorHandler('interestedIn', inputMethod => {
+    self.form.setErrorHandler('interestedIn', inputMethod => {
       if (inputMethod.inputValue === 'Select an option') {
         return 'not selected'
       }
     })
-    self.snapshot.show()
+    self.form.show()
   },
   enableOkButton (enable) {
-    self.snapshot.buttons.items[0].enableButton(enable)
+    self.form.buttons.items[0].enableButton(enable)
+  },
+  showSubmittedInfo () {
+    rootModel().getController('TooltipMessage').showMessage(
+      self.form.buttons.items[0], 'Submitted',
+    )
+    self.form.dialog.setTitle('Request submitted!')
+  },
+  handleStatus () {
+    if (rootModel().system.schema.getMeta('status') === 'ok') {
+      self.form.dialog.setTitle('Request submitted!')
+    }
   },
   showError (relativeElement, error) {
     const tooltip = rootModel().getController('TooltipError')
@@ -179,8 +200,10 @@ export default plugin('RequestADemo', {
     if (formData) {
       self.formContent.setFormData(formData)
     }
+    self.form.handleErrors() // check if loaded data has errors
+    self.enableOkButton(!self.form.error) // try enabling ok button
   },
-  saveData () {
+  submit () {
     const { data } = self.formContent
     if (!self.table) {
       throw new Error("Didn't locate table: 'Demo Requests'")
@@ -190,19 +213,20 @@ export default plugin('RequestADemo', {
   setSubmittedRecord () {
     const table = self.table
     if (table && table.records.size > 0) {
-      if (!self.submittedRecord) {
+      //if (!self.submittedRecord) {
         self.submittedRecord = Array.from(table.records.values())[0]
-      } else if (table.records.size > 1) {
-        throw new Error('Not allowed to have more than one record')
-      }
+      // }
+      //  else if (table.records.size > 1) {
+      //  throw new Error('Not allowed to have more than one record')
+      //}
     }
   },
 })).events({
-  HandleSelectInputItem: ({ data }) => {
+  HandleSelectInputItem ({ data }) {
     InputSelect.self(data).handleItemClick(data)
   },
-  FormOk: ({ self, data, errHandlers }) => {
-    self.saveData()
+  FormOk ({ self, data, errHandlers }) {
+    self.submit()
     //const { schema } = rootModel().system
     //const status = schema.getMeta('status', 'local')
     // form data returned by getter
