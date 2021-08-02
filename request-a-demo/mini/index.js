@@ -1,7 +1,6 @@
 import { plugin, plugins, typePlugin, cssWrapper } from '@hoc/plugins-core'
 import { formInputParams, createSelectItemColoredText } from '@hoc/components'
-import EmailValidator from 'email-validator'
-import { rootModel, RecordSafeReference } from '@hoc/models'
+import { storeRoot, rootModel, RecordSafeReference } from '@hoc/models'
 
 const {
   List,
@@ -9,11 +8,40 @@ const {
   CustomFormContent,
   Button,
   Input,
+  InputEmail,
   TextArea,
   InputSelect,
 } = plugins
 
+const DemoRequestsTableName = 'Requests'
+
+function ensureLocalRecord () {
+  const tableName = 'Request data'
+  const store = storeRoot()
+  const schema = store.schema('local')
+  const { types } = store
+  let table = schema.table(tableName)
+  if (!table) {
+    table = schema.addTable(tableName)
+    table.addColumn(types.Json, { name: 'email', type: 'email', key: true })
+    table.addColumn(types.Json, { name: 'firstName', type: 'singleLine' })
+    table.addColumn(types.Json, { name: 'lastName', type: 'singleLine' })
+    table.addColumn(types.Json, { name: 'about', type: 'multiLine' })
+    table.addColumn(types.Json, { name: 'interestedIn', type: 'singleLine' })
+    table.addColumn(types.Json, { name: 'status', uiDataType: 'singleLine' })
+    table.addColumn(types.Json, { name: 'submit', uiDataType: 'action' })
+  }
+  let record
+  if (!table.records.size) {
+    record = table.insertRecordData({})
+  } else {
+    record = Array.from(table.records.values())[0]
+  }
+  return record
+}
+
 export default plugin('RequestADemo', {
+  localRecord: RecordSafeReference,
   submittedRecord: RecordSafeReference,
   snapshot: typePlugin(CustomForm, p => p.create({
     title: 'Request a demo',
@@ -41,9 +69,10 @@ export default plugin('RequestADemo', {
 	      email: {
           required: true,
           displayName: 'Email',
-          input: Input.create({
+          input: InputEmail.create({
             ...formInputParams(),
             autoFocus: false,
+            coloredOnError: false,
           }),
         },
 	      about: {
@@ -87,9 +116,9 @@ export default plugin('RequestADemo', {
     }),
     buttons: List.create({
       innerCss: cssWrapper`
-      display: flex;
-      padding: 1.5rem;
-      justify-content: center;
+        display: flex;
+        padding: 1.5rem;
+        justify-content: center;
       `,
       items: [
         Button.create({
@@ -113,33 +142,41 @@ export default plugin('RequestADemo', {
   })),
 }).reactions(self => [
   [
+    () => !self.localRecord,
+    () => self.setLocalRecord(),
+    'setLocalRecord',
+  ], [
     () => self.submittedRecord ? self.submittedRecord.column('status').value : null,
     status => {
       if (status != null) {
+        self.localTable.records.values()
         rootModel().system.schema.setMeta('status', status)
         self.handleStatus()
       }
     },
     'status'
-  ], [
-    () => self.table ? self.table.records.size : 0,
-    size => {
-      if (size > 0) self.setSubmittedRecord()
-    },
-    'setSubmittedRecord',
-  ], [
+  ],
+  // [
+  //   () => self.table ? self.table.records.size : 0,
+  //   size => {
+  //     if (size > 0) self.setSubmittedRecord()
+  //   },
+  //   'setSubmittedRecord',
+  // ],
+  [
     () => self.form.error,
     error => self.enableOkButton(!error),
     'enableOkButton',
   ], [
     () => self.formContent.currentDataStr,
     () => {
-      // save in local storage what user entered
-      rootModel().system.schema.setMeta(
-        'formData', self.formContent.data, 'local',
-      )
+      if (self.localRecord) {
+        self.localRecord.setMany(self.formContent.data)
+      } else {
+        console.log('Didn\'t locate local record')
+      }
     },
-    'save formData locally',
+    'localRecord.setMany',
   ],
 ]).views(self => ({
   get form () {
@@ -149,15 +186,23 @@ export default plugin('RequestADemo', {
     return self.form.formContent
   },
   get table () {
-    return rootModel().system.schema.table('Demo Requests')
+    return rootModel().system.schema.table(DemoRequestsTableName)
+  },
+  get okButton () {
+    return self.form.buttons.items[0]
   },
 })).actions(self => ({
+  setLocalRecord () {
+    self.localRecord = ensureLocalRecord()
+    self.formContent.setEditingRecord(self.localRecord)
+  },
   afterCreate () {
+    self.setLocalRecord()
     self.form.dialog.closeButton.setVisible(false)
     self.handleStatus()
     self.loadSavedData()
     self.form.setErrorHandler('email', inputMethod => {
-      if (!EmailValidator.validate(inputMethod.inputValue)) {
+      if (!inputMethod.input.valid) {
         return 'is incorrect'
       }
     })
@@ -169,11 +214,12 @@ export default plugin('RequestADemo', {
     self.form.show()
   },
   enableOkButton (enable) {
-    self.form.buttons.items[0].enableButton(enable)
+    self.okButton.enableButton(enable)
   },
   showSubmittedInfo () {
+    // show message aside of okButton
     rootModel().getController('TooltipMessage').showMessage(
-      self.form.buttons.items[0], 'Submitted',
+      self.okButton, 'Submitted',
     )
     self.form.dialog.setTitle('Request submitted!')
   },
@@ -194,11 +240,8 @@ export default plugin('RequestADemo', {
     tooltip.hide()
   },
   loadSavedData () {
-    // since we save data on submit, here we populate form with
-    // already submitted data so user can see it when open again
-    const formData = rootModel().system.schema.getMeta('formData', 'local')
-    if (formData) {
-      self.formContent.setFormData(formData)
+    if (self.localRecord) {
+      self.formContent.setFormData(self.localRecord.object())
     }
     self.form.handleErrors() // check if loaded data has errors
     self.enableOkButton(!self.form.error) // try enabling ok button
@@ -206,9 +249,10 @@ export default plugin('RequestADemo', {
   submit () {
     const { data } = self.formContent
     if (!self.table) {
-      throw new Error("Didn't locate table: 'Demo Requests'")
+      throw new Error(`Didn't locate table: '${DemoRequestsTableName}'`)
     }
     self.table.insertRecordData(data)
+    self.setSubmittedRecord()
   },
   setSubmittedRecord () {
     const table = self.table

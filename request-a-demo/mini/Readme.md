@@ -11,5 +11,6 @@ HOCTAIL_APP=Request A Demo
 ```
 * Go to project's folder and try:
   1. `yarn` or `npm i`
+  1. `hoctail install node_modules/email-validator`
   1. `hoctail deploy.js`
   1. `hoctail mini .`
