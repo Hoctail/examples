@@ -14,9 +14,15 @@ const {
 } = plugins
 
 const DemoRequestsTableName = 'Requests'
+const SubmittedTitle = 'Request submitted!'
+const SubmittedMessage = 'Request submitted!'
 
+/**
+ * Creating local table with the same columns as server table has.
+ * Storage type like types.Json doesn't matter since it's just local.
+*/
 function ensureLocalRecord () {
-  const tableName = 'Request data'
+  const tableName = 'Local request'
   const store = storeRoot()
   const schema = store.schema('local')
   const { types } = store
@@ -42,7 +48,6 @@ function ensureLocalRecord () {
 
 export default plugin('RequestADemo', {
   localRecord: RecordSafeReference,
-  submittedRecord: RecordSafeReference,
   snapshot: typePlugin(CustomForm, p => p.create({
     title: 'Request a demo',
     formContent: CustomFormContent.create({
@@ -134,7 +139,8 @@ export default plugin('RequestADemo', {
           name: 'Submit',
           disabled: true,
           events: {
-            onClick: 'RequestADemo.FormOk',
+            onClick: 'RequestADemo.Submit',
+            onMouseEnter: 'RequestADemo.HoveringOkButton',
           },
         }),
       ],
@@ -146,27 +152,13 @@ export default plugin('RequestADemo', {
     () => self.setLocalRecord(),
     'setLocalRecord',
   ], [
-    () => self.submittedRecord ? self.submittedRecord.column('status').value : null,
-    status => {
-      if (status != null) {
-        self.localTable.records.values()
-        rootModel().system.schema.setMeta('status', status)
-        self.handleStatus()
-      }
-    },
-    'status'
-  ],
-  // [
-  //   () => self.table ? self.table.records.size : 0,
-  //   size => {
-  //     if (size > 0) self.setSubmittedRecord()
-  //   },
-  //   'setSubmittedRecord',
-  // ],
-  [
+    () => self.submittedRecord,
+    () => self.setTitle(),
+    'setTitle',
+  ], [
     () => self.form.error,
-    error => self.enableOkButton(!error),
-    'enableOkButton',
+    () => self.handleOkButtonVisibility(),
+    'handleOkButtonVisibility',
   ], [
     () => self.formContent.currentDataStr,
     () => {
@@ -191,6 +183,16 @@ export default plugin('RequestADemo', {
   get okButton () {
     return self.form.buttons.items[0]
   },
+  get submittedRecord () {
+    const table = self.table
+    let record
+    if (table && table.records.size > 0) {
+      record = Array.from(table.records.values())[0]
+    }
+    // do not return submitted record for owner
+    // so form will not be locked for owner
+    if (!storeRoot().system.isOwner) return record
+  },
 })).actions(self => ({
   setLocalRecord () {
     self.localRecord = ensureLocalRecord()
@@ -199,7 +201,7 @@ export default plugin('RequestADemo', {
   afterCreate () {
     self.setLocalRecord()
     self.form.dialog.closeButton.setVisible(false)
-    self.handleStatus()
+    self.setTitle()
     self.loadSavedData()
     self.form.setErrorHandler('email', inputMethod => {
       if (!inputMethod.input.valid) {
@@ -213,19 +215,24 @@ export default plugin('RequestADemo', {
     })
     self.form.show()
   },
-  enableOkButton (enable) {
-    self.okButton.enableButton(enable)
+  handleOkButtonVisibility () {
+    const enable = !self.form.error
+    self.okButton.enableButton(/*!self.submittedRecord && */enable)
   },
-  showSubmittedInfo () {
+  showMessageAsideOkButton (message) {
     // show message aside of okButton
     rootModel().getController('TooltipMessage').showMessage(
-      self.okButton, 'Submitted',
+      self.okButton, message,
     )
-    self.form.dialog.setTitle('Request submitted!')
   },
-  handleStatus () {
-    if (rootModel().system.schema.getMeta('status') === 'ok') {
-      self.form.dialog.setTitle('Request submitted!')
+  showSubmittedInfo () {
+    self.showMessageAsideOkButton(SubmittedMessage)
+    self.setTitle()
+  },
+  setTitle () {
+    if (self.submittedRecord) {
+      self.form.dialog.setTitle(SubmittedTitle)
+      self.setReadOnly()
     }
   },
   showError (relativeElement, error) {
@@ -244,7 +251,7 @@ export default plugin('RequestADemo', {
       self.formContent.setFormData(self.localRecord.object())
     }
     self.form.handleErrors() // check if loaded data has errors
-    self.enableOkButton(!self.form.error) // try enabling ok button
+    self.handleOkButtonVisibility() // try enabling ok button
   },
   submit () {
     const { data } = self.formContent
@@ -252,33 +259,34 @@ export default plugin('RequestADemo', {
       throw new Error(`Didn't locate table: '${DemoRequestsTableName}'`)
     }
     self.table.insertRecordData(data)
-    self.setSubmittedRecord()
+    self.showMessageAsideOkButton('Submitted!')
+    self.setTitle()
+    self.handleOkButtonVisibility() // try enabling ok button
   },
-  setSubmittedRecord () {
-    const table = self.table
-    if (table && table.records.size > 0) {
-      //if (!self.submittedRecord) {
-        self.submittedRecord = Array.from(table.records.values())[0]
-      // }
-      //  else if (table.records.size > 1) {
-      //  throw new Error('Not allowed to have more than one record')
-      //}
-    }
+  setReadOnly (readOnly=true) {
+    self.formContent.fields.forEach((inputMethod, name) => {
+      const { input } = inputMethod
+      if (name === 'interestedIn') input.setDisabled(readOnly)
+      else input.setReadOnly(readOnly)
+    })
   },
 })).events({
   HandleSelectInputItem ({ data }) {
     InputSelect.self(data).handleItemClick(data)
   },
-  FormOk ({ self, data, errHandlers }) {
+  HoveringOkButton ({ self }) {
+    if (self.submittedRecord) {
+      self.showMessageAsideOkButton(SubmittedMessage)
+    }
+  },
+  Submit ({ self, errHandlers }) {
     self.submit()
-    //const { schema } = rootModel().system
-    //const status = schema.getMeta('status', 'local')
-    // form data returned by getter
-    //const formData = self.formContent.data
-    //schema.setMeta('status', true, 'local')
-    //console.log(formData)
-    // something went wrong
-    
-    // errHandlers.push([() => self.showError(data, self.status.value())])
+    // err handling:    
+    errHandlers.push([exception => {
+      if (exception.message.includes('duplicate key value violates unique constraint')) {
+        mdtoast('Submit error: Duplicate email', { type: 'error' })  
+        return true // handled, don't display exception
+      }
+    }])
   },
 })

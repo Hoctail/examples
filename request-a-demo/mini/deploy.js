@@ -10,7 +10,7 @@ await hoctail.stx(({ store, types }) => {
     table.addColumn(types.Json, { name: 'lastName', type: 'singleLine' })
     table.addColumn(types.Json, { name: 'about', type: 'multiLine' })
     table.addColumn(types.Json, { name: 'interestedIn', type: 'singleLine' })
-    table.addColumn(types.Json, { name: 'status', uiDataType: 'singleLine' })
+    table.addColumn(types.Text, { name: 'status', uiDataType: 'singleLine' })
     table.addColumn(types.Json, { name: 'submit', uiDataType: 'action' })
 
     store.runCommand({
@@ -18,34 +18,33 @@ await hoctail.stx(({ store, types }) => {
       path: `/schemas/${schema.schemaName}/tables/${tableName}/constraints/unique/email`,
     })
   }
-  table.offEvent(inserted)
-  table.onEvent('insert', inserted, { tableName })
 
   table.setVisibleToOthers(true)
   table.setAllowOthersToInsert(true)
   schema.table('metadata').setVisibleToOthers(true)
   schema.table('metadata').setAllowOthersToSelect(true)
 
-  
+  table.offEvent(inserted)
+  table.setTrigger({
+    func: inserted,
+    event: `before insert`,
+    props: { tableName },
+  })
+
   function inserted (event) {
     console.log('inserted record', JSON.stringify(event.new))
     const EmailValidator = require('email-validator')
-    event.stx(store => {
-      const record = store.root.triggerRecord()
-
-      if (!EmailValidator.validate(event.new.email)) {
-        throw new Error(`Email '${event.new.email}' is invalid`)
-      }
-
-      const tRecord = store.system.schema.table(event.tableName).records.get(event.new.id)
-      console.log('triggerData', record, store.root.triggerData,
-		  tRecord ? tRecord.toJSON(): 'no table Record in model yet',
-		  JSON.stringify(event.new),
-        /*JSON.stringify(hoc.sql(`select id, email from "${event.schema}"."Demo Requests" where id=$1`, [event.new.id])),*/
-        JSON.stringify(store.root.clocks),
-      )
-      // record.set('status', 'ok')
-    })
-    console.log('inserted', JSON.stringify(data.new))
-  }  
+    if (!EmailValidator.validate(event.new.email)) {
+      throw new Error(`Email '${event.new.email}' is invalid`)
+    }
+    if (hoc.context.owner.length && event.new.owner !== hoc.context.owner) {
+      const count = parseInt((hoc.sql(
+        `select count(1) from "${event.schema}"."${event.table}"`,
+      ))[0].count)
+      if (count > 1) throw new Error(`User can't submit request more than once.`)
+    }
+    event.new.status = 'added'
+    return event.new
+  }
 })
+
