@@ -1,14 +1,9 @@
 // import React from 'react'
-import { plugin, plugins, typePlugin, cssWrapper, metaElement, registerUiDataType } from '@hoc/plugins-core'
+import { plugin, plugins, typePlugin, cssWrapper } from '@hoc/plugins-core'
 import { formInputParams, createSelectItemColoredText, } from '@hoc/components'
-import { storeRoot, rootModel, RecordSafeReference, DataCellReference } from '@hoc/models'
+import { storeRoot, rootModel, RecordSafeReference } from '@hoc/models'
 import { values } from 'mobx'
-
-// import React from 'react'
-// import styled, { css } from 'styled-components'
-// import { types, isAlive } from 'mobx-state-tree'
-// //import PropTypes from 'prop-types'
-// import { hocTypes } from '@hoc/models'
+import { types } from 'mobx-state-tree'
 
 const {
   List,
@@ -24,10 +19,13 @@ const {
   Demo,
 } = plugins
 
+const title = 'Request a demo'
 const localTableName = 'Local request'
 const DemoRequestsTableName = 'Requests'
 const SubmittedTitle = 'Request submitted!'
 const SubmittedMessage = 'Request submitted!'
+const OneRowOnlyMessage = 'Only one row is allowed!'
+const InsufficientDataMessage = 'More fields required to input'
 
 /**
  * Creating local table with the same columns as server table has.
@@ -36,17 +34,17 @@ const SubmittedMessage = 'Request submitted!'
 function ensureLocalRecord () {
   const store = storeRoot()
   const schema = store.schema('local')
-  const { types } = store
   let table = schema.table(localTableName)
   if (!table) {
+    const { Json } = store.types
     table = schema.addTable(localTableName)
-    table.addColumn(types.Json, { name: 'email', type: 'email', key: true })
-    table.addColumn(types.Json, { name: 'firstName', type: 'singleLine' })
-    table.addColumn(types.Json, { name: 'lastName', type: 'singleLine' })
-    table.addColumn(types.Json, { name: 'about', type: 'multiLine' })
-    table.addColumn(types.Json, { name: 'interestedIn', type: 'singleLine' })
-    table.addColumn(types.Json, { name: 'status', uiDataType: 'singleLine' })
-    table.addColumn(types.Json, { name: 'submit', uiDataType: 'action' })
+    table.addColumn(Json, { name: 'email', type: 'email', key: true })
+    table.addColumn(Json, { name: 'firstName', type: 'singleLine' })
+    table.addColumn(Json, { name: 'lastName', type: 'singleLine' })
+    table.addColumn(Json, { name: 'about', type: 'multiLine' })
+    table.addColumn(Json, { name: 'interestedIn', type: 'singleLine' })
+    table.addColumn(Json, { name: 'status', uiDataType: 'singleLine' })
+    table.addColumn(Json, { name: 'submit', uiDataType: 'action' })
   }
   let record
   if (!table.records.size) {
@@ -57,11 +55,49 @@ function ensureLocalRecord () {
   return { table, record }
 }
 
-const RequestADemo = plugin('RequestADemo', {
+const CommonModel = types.model('CommonModel', {
   localRecord: RecordSafeReference,
-  navbar: false,
-  snapshot: typePlugin(CustomForm, p => p.create({
-    title: 'Request a demo',
+}).views(self => ({
+  get table () {
+    return rootModel().system.schema.table(DemoRequestsTableName)
+  },
+  get localRecords () {
+    return values(self.localTableStore.records)
+  },
+})).actions(self => ({
+  afterCreate () {
+    self.ensureLocalRecord()
+  },
+  showError (relativeElement, message, options) {
+    rootModel().getController('TooltipError').showMessage(
+      relativeElement,
+      message, options || { relativePos: 'right' },
+    )
+  },
+  showInfo (relativeElement, message, options) {
+    rootModel().getController('TooltipMessage').showMessage(
+      relativeElement, message, options,
+    )
+  },
+  ensureLocalRecord () {
+    self.localRecord = ensureLocalRecord().record
+    return self.localRecord
+  },
+  insertRecord () {
+    const { status, submit, ...data } = self.localRecord.object()
+    if (!self.table) {
+      throw new Error(`Didn't locate table: '${DemoRequestsTableName}'`)
+    }
+    self.table.insertRecordData({
+      ...data,
+    })
+    return true
+  },
+}))
+
+function formInstance () {
+  return CustomForm.create({
+    title: title,
     formContent: CustomFormContent.create({
       // add wrapper around scroll area as scroller doesn't respect paddings
       outerCss: cssWrapper``,
@@ -157,12 +193,17 @@ const RequestADemo = plugin('RequestADemo', {
         }),
       ],
     }),
-  })),
+  })
+} 
+
+const RequestADemo = plugin('RequestADemo', CommonModel, {
+  navbar: false,
+  snapshot: typePlugin(CustomForm, p => formInstance()),
 }).reactions(self => [
   [
     () => !self.localRecord,
-    () => self.setLocalRecord(),
-    'setLocalRecord',
+    () => self.assignLocalRecord(),
+    'assignLocalRecord',
   ], [
     () => self.submittedRecord,
     () => self.setTitle(),
@@ -189,9 +230,6 @@ const RequestADemo = plugin('RequestADemo', {
   get formContent () {
     return self.form.formContent
   },
-  get table () {
-    return rootModel().system.schema.table(DemoRequestsTableName)
-  },
   get okButton () {
     return self.form.buttons.items[0]
   },
@@ -206,12 +244,13 @@ const RequestADemo = plugin('RequestADemo', {
     if (!storeRoot().system.isOwner) return record
   },
 })).actions(self => ({
-  setLocalRecord () {
-    self.localRecord = ensureLocalRecord().record
-    self.formContent.setEditingRecord(self.localRecord)
+  assignLocalRecord () {
+    self.formContent.setEditingRecord(
+      self.ensureLocalRecord()
+    )
   },
   afterCreate () {
-    self.setLocalRecord()
+    self.ensureLocalRecord()
     self.form.dialog.closeButton.setVisible(false)
     self.setTitle()
     self.loadSavedData()
@@ -229,30 +268,19 @@ const RequestADemo = plugin('RequestADemo', {
   },
   handleOkButtonVisibility () {
     const enable = !self.form.error
-    self.okButton.enableButton(/*!self.submittedRecord && */enable)
+    self.okButton.enableButton(!self.submittedRecord && enable)
   },
   showMessageAsideOkButton (message) {
-    // show message aside of okButton
-    rootModel().getController('TooltipMessage').showMessage(
-      self.okButton, message,
-    )
+    self.showError(self.okButton, message)
   },
   showSubmittedInfo () {
     self.showMessageAsideOkButton(SubmittedMessage)
     self.setTitle()
   },
   setTitle () {
-    if (self.submittedRecord) {
-      self.form.dialog.setTitle(SubmittedTitle)
-      self.setReadOnly()
-    }
-  },
-  showError (relativeElement, error) {
-    const tooltip = rootModel().getController('TooltipError')
-    tooltip.showMessage(relativeElement,
-      error,
-      { relativePos: 'right' },
-    )
+    const submit = self.submittedRecord
+    self.form.dialog.setTitle(submit ? SubmittedTitle : title)
+    self.setReadOnly(!!submit)
   },
   hideError () {
     const tooltip = rootModel().getController('TooltipError')
@@ -266,17 +294,11 @@ const RequestADemo = plugin('RequestADemo', {
     self.handleOkButtonVisibility() // try enabling ok button
   },
   submit () {
-    const { data } = self.formContent
-    if (!self.table) {
-      throw new Error(`Didn't locate table: '${DemoRequestsTableName}'`)
+    if (self.insertRecord()) {
+      self.showMessageAsideOkButton('Submitted!')
+      self.setTitle()
+      self.handleOkButtonVisibility() // try enabling ok button  
     }
-    self.table.insertRecordData({
-      ...data,
-      status: '',
-    })
-    self.showMessageAsideOkButton('Submitted!')
-    self.setTitle()
-    self.handleOkButtonVisibility() // try enabling ok button
   },
   setReadOnly (readOnly=true) {
     self.formContent.fields.forEach((inputMethod, name) => {
@@ -285,16 +307,7 @@ const RequestADemo = plugin('RequestADemo', {
       else input.setReadOnly(readOnly)
     })
   },
-}))
-// .component(props => {
-//   const {data, restProps} = props
-//   return (
-//     <div {...restProps}>
-//       {metaElement(data.snapshot)}
-//     </div>
-//   )
-// })
-.events({
+})).events({
   HandleSelectInputItem ({ data }) {
     InputSelect.self(data).handleItemClick(data)
   },
@@ -308,41 +321,93 @@ const RequestADemo = plugin('RequestADemo', {
     // err handling:    
     errHandlers.push([exception => {
       if (exception.message.includes('duplicate key value violates unique constraint')) {
-        mdtoast('Submit error: Duplicate email', { type: 'error' })  
+        mdtoast('Submit error: Duplicate email', { type: 'error' })
         return true // handled, don't display exception
       }
     }])
   },
 })
 
-const AsketMode = plugin('AsketMode', {
-  snapshot: typePlugin(Table, p => p.create({
-    id: ensureLocalRecord().table.id,
+const AsketMode = plugin('AsketMode', CommonModel, {
+  snapshot: typePlugin(List, p => p.create({
+    innerCss: cssWrapper`
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    `,
+    items: [
+      Label.create({
+        innerCss: cssWrapper`padding: 1rem;`,
+        text: 'Request A Demo',
+      }),
+      Table.create({
+        readOnlySchema: true, // no controls for renaming columns
+        id: ensureLocalRecord().table.id,
+      }),
+    ],
   })),
 }).reactions(self => [
   [
     () => self.hasExcessiveRecords,
-    two => {
-      console.log('two', two)
-      if (two) throw new Error('Application don\'t need more local records')
-    },
-    'two',
+    () => self.deleteExcessiveLocalRecords(),
+    'deleteExcessiveLocalRecords',
+  ], [
+    () => self.submitValue,
+    () => self.submit(),
+    'submit',
   ]
 ]).views(self => ({
-  get localTable () {
-    const res = storeRoot().schema('local').table(localTableName)
-    console.log('localTable', res.toJSON())
-    return res
+  get label () {
+    return self.snapshot.items[0]
   },
-  get localRecord () {
-    const recs =  values(self.localTable.records)
-    return recs.length ? recs[0] : undefined
+  get uiTable () {
+    return self.snapshot.items[1]
+  },
+  get localTableStore () {
+    return storeRoot().schema('local').table(localTableName)
   },
   get hasExcessiveRecords () {
-    return self.localTable.records.size > 1
+    return self.localRecords.length > 1
+  },
+  get submitValue () {
+    return self.localRecord.column('submit').value
+  },
+  get newRowBtn () {
+    return self.uiTable.leftTable.newRow.newRowBtn
+  },
+  get submitButtonElement () {
+    const el = document.querySelector(
+      '[data-testid="CellAction"] > [data-testid="Button"]'
+    )
+    return el
   },
 })).actions(self => ({
   deleteExcessiveLocalRecords () {
+    if (self.hasExcessiveRecords) {
+      const excessive = self.localRecords.slice(1)
+      excessive.forEach(rec => {
+        self.localTableStore.deleteRecord(rec.id)
+      })
+      console.log(OneRowOnlyMessage)
+      self.showError(
+        self.newRowBtn,
+        OneRowOnlyMessage, { relativePos: 'bottom-right' },
+      )
+    }
+  },
+  submit () {
+    const { email, firstName, lastName, about, interestedIn }
+      = self.localRecord.object()
+    if (email && firstName && lastName && about && interestedIn) {
+      if (self.insertRecord()) {
+
+      }
+    } else {
+      self.showError(
+        self.submitButtonElement, InsufficientDataMessage,
+        { relativePos: 'bottom' }
+      )
+    }
   },
 }))
 

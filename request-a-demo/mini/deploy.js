@@ -49,7 +49,7 @@ await hoctail.stx(({ store, types }) => {
         ))[0].count)
         if (count > 1) throw new Error(`User can't submit request more than once.`)
       }
-      event.new.status = 'added'
+      event.new.status = 'submitted'
     } else if (event.op === 'UPDATE' || event.op === 'DELETE') {
       hoc.dummyLog(`trigger ${event.op}, rec owner ${owner}, app owner ${hoc.context.owner}, hoc.isOwner ${hoc.isOwner}`)
       if (!hoc.isOwner) {
