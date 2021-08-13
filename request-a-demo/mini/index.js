@@ -1,6 +1,14 @@
-import { plugin, plugins, typePlugin, cssWrapper } from '@hoc/plugins-core'
-import { formInputParams, createSelectItemColoredText } from '@hoc/components'
-import { storeRoot, rootModel, RecordSafeReference } from '@hoc/models'
+// import React from 'react'
+import { plugin, plugins, typePlugin, cssWrapper, metaElement, registerUiDataType } from '@hoc/plugins-core'
+import { formInputParams, createSelectItemColoredText, } from '@hoc/components'
+import { storeRoot, rootModel, RecordSafeReference, DataCellReference } from '@hoc/models'
+import { values } from 'mobx'
+
+// import React from 'react'
+// import styled, { css } from 'styled-components'
+// import { types, isAlive } from 'mobx-state-tree'
+// //import PropTypes from 'prop-types'
+// import { hocTypes } from '@hoc/models'
 
 const {
   List,
@@ -11,8 +19,12 @@ const {
   InputEmail,
   TextArea,
   InputSelect,
+  Label,
+  Table,
+  Demo,
 } = plugins
 
+const localTableName = 'Local request'
 const DemoRequestsTableName = 'Requests'
 const SubmittedTitle = 'Request submitted!'
 const SubmittedMessage = 'Request submitted!'
@@ -22,13 +34,12 @@ const SubmittedMessage = 'Request submitted!'
  * Storage type like types.Json doesn't matter since it's just local.
 */
 function ensureLocalRecord () {
-  const tableName = 'Local request'
   const store = storeRoot()
   const schema = store.schema('local')
   const { types } = store
-  let table = schema.table(tableName)
+  let table = schema.table(localTableName)
   if (!table) {
-    table = schema.addTable(tableName)
+    table = schema.addTable(localTableName)
     table.addColumn(types.Json, { name: 'email', type: 'email', key: true })
     table.addColumn(types.Json, { name: 'firstName', type: 'singleLine' })
     table.addColumn(types.Json, { name: 'lastName', type: 'singleLine' })
@@ -43,11 +54,12 @@ function ensureLocalRecord () {
   } else {
     record = Array.from(table.records.values())[0]
   }
-  return record
+  return { table, record }
 }
 
-export default plugin('RequestADemo', {
+const RequestADemo = plugin('RequestADemo', {
   localRecord: RecordSafeReference,
+  navbar: false,
   snapshot: typePlugin(CustomForm, p => p.create({
     title: 'Request a demo',
     formContent: CustomFormContent.create({
@@ -195,7 +207,7 @@ export default plugin('RequestADemo', {
   },
 })).actions(self => ({
   setLocalRecord () {
-    self.localRecord = ensureLocalRecord()
+    self.localRecord = ensureLocalRecord().record
     self.formContent.setEditingRecord(self.localRecord)
   },
   afterCreate () {
@@ -258,7 +270,10 @@ export default plugin('RequestADemo', {
     if (!self.table) {
       throw new Error(`Didn't locate table: '${DemoRequestsTableName}'`)
     }
-    self.table.insertRecordData(data)
+    self.table.insertRecordData({
+      ...data,
+      status: '',
+    })
     self.showMessageAsideOkButton('Submitted!')
     self.setTitle()
     self.handleOkButtonVisibility() // try enabling ok button
@@ -270,7 +285,16 @@ export default plugin('RequestADemo', {
       else input.setReadOnly(readOnly)
     })
   },
-})).events({
+}))
+// .component(props => {
+//   const {data, restProps} = props
+//   return (
+//     <div {...restProps}>
+//       {metaElement(data.snapshot)}
+//     </div>
+//   )
+// })
+.events({
   HandleSelectInputItem ({ data }) {
     InputSelect.self(data).handleItemClick(data)
   },
@@ -290,3 +314,42 @@ export default plugin('RequestADemo', {
     }])
   },
 })
+
+const AsketMode = plugin('AsketMode', {
+  snapshot: typePlugin(Table, p => p.create({
+    id: ensureLocalRecord().table.id,
+  })),
+}).reactions(self => [
+  [
+    () => self.hasExcessiveRecords,
+    two => {
+      console.log('two', two)
+      if (two) throw new Error('Application don\'t need more local records')
+    },
+    'two',
+  ]
+]).views(self => ({
+  get localTable () {
+    const res = storeRoot().schema('local').table(localTableName)
+    console.log('localTable', res.toJSON())
+    return res
+  },
+  get localRecord () {
+    const recs =  values(self.localTable.records)
+    return recs.length ? recs[0] : undefined
+  },
+  get hasExcessiveRecords () {
+    return self.localTable.records.size > 1
+  },
+})).actions(self => ({
+  deleteExcessiveLocalRecords () {
+  },
+}))
+
+export default [
+  AsketMode,
+  plugin('Demo Mode', {
+    snapshot: typePlugin(Demo, p => p.create()),
+  }),
+  RequestADemo,
+]

@@ -14,3 +14,8 @@ HOCTAIL_APP=Request A Demo
   1. `hoctail install node_modules/email-validator`
   1. `hoctail deploy.js`
   1. `hoctail mini .`
+
+### Check tour submit
+From browser's console you can check your record is submitted
+`Array.from(store.system.schema.table('Requests').records.values()).map(r => r.object())`
+`await hoctail.query(`select * from "${store.system.schema.table('Requests').id}"`)`

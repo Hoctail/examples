@@ -1,3 +1,5 @@
+await hoctail.install('node_modules/email-validator')
+
 await hoctail.stx(({ store, types }) => {
   const { schema } = store.system
   
@@ -24,26 +26,37 @@ await hoctail.stx(({ store, types }) => {
   schema.table('metadata').setVisibleToOthers(true)
   schema.table('metadata').setAllowOthersToSelect(true)
 
-  table.offEvent(inserted)
-  table.setTrigger({
-    func: inserted,
-    event: `before insert`,
-    props: { tableName },
-  })
+  // using before trigger to be able altering a data
+  table.setAction(inserted_updated, { when: 'before', op: ['insert', 'update', 'delete'] })
+  console.log('table triggers', JSON.stringify(Array.from(table.triggers.keys())))
 
-  function inserted (event) {
-    console.log('inserted record', JSON.stringify(event.new))
+  function inserted_updated (event) {
+    hoc.dummyLog(`inserted trigger ${event.op} ${event.when}, old: ${JSON.stringify(event.old)}, new: ${JSON.stringify(event.new)}`)
+
+    // avoid population bad email
+    const email = event.new ? event.new.email : event.old.email
+    const owner = event.new ? event.new.owner : event.old.owner
+
     const EmailValidator = require('email-validator')
-    if (!EmailValidator.validate(event.new.email)) {
-      throw new Error(`Email '${event.new.email}' is invalid`)
+    if (!EmailValidator.validate(email)) {
+      throw new Error(`Email '${email}' is invalid`)
     }
-    if (hoc.context.owner.length && event.new.owner !== hoc.context.owner) {
-      const count = parseInt((hoc.sql(
-        `select count(1) from "${event.schema}"."${event.table}"`,
-      ))[0].count)
-      if (count > 1) throw new Error(`User can't submit request more than once.`)
+    if (event.op === 'INSERT') {
+      // do not allow submit more than once
+      if (hoc.context.owner.length && owner !== hoc.context.owner) {
+        const count = parseInt((hoc.sql(
+          `select count(1) from "${event.schema}"."${event.table}"`,
+        ))[0].count)
+        if (count > 1) throw new Error(`User can't submit request more than once.`)
+      }
+      event.new.status = 'added'
+    } else if (event.op === 'UPDATE' || event.op === 'DELETE') {
+      hoc.dummyLog(`trigger ${event.op}, rec owner ${owner}, app owner ${hoc.context.owner}, hoc.isOwner ${hoc.isOwner}`)
+      if (!hoc.isOwner) {
+        throw new Error('User not allowed to update/delete submitted data')
+      }
     }
-    event.new.status = 'added'
+    
     return event.new
   }
 })
