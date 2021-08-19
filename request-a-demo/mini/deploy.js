@@ -8,8 +8,8 @@ await hoctail.stx(({ store, types }) => {
   if (!table) {
     table = schema.addTable(tableName)
     table.addColumn(types.Email, { name: 'email', type: 'singleLine', key: true })
-    table.addColumn(types.Json, { name: 'firstName', type: 'singleLine' })
-    table.addColumn(types.Json, { name: 'lastName', type: 'singleLine' })
+    table.addColumn(types.Json, { name: 'FirstName', type: 'singleLine' })
+    table.addColumn(types.Json, { name: 'LastName', type: 'singleLine' })
     table.addColumn(types.Json, { name: 'about', type: 'multiLine' })
     table.addColumn(types.Json, { name: 'interestedIn', type: 'singleLine' })
     table.addColumn(types.Text, { name: 'status', uiDataType: 'singleLine' })
@@ -39,7 +39,7 @@ await hoctail.stx(({ store, types }) => {
 
     const EmailValidator = require('email-validator')
     if (!EmailValidator.validate(email)) {
-      throw new Error(`Email '${email}' is invalid`)
+      throw new Error(`email '${email}' is invalid`)
     }
     if (event.op === 'INSERT') {
       // do not allow submit more than once

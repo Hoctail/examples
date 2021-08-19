@@ -1,12 +1,10 @@
+import EmailValidator from 'email-validator'
 import { plugin, typePlugin, cssWrapper } from '@hoc/plugins-core'
 import { rootModel } from '@hoc/models'
-import {
-  ListPlugin as List,
-  LabelPlugin as Label,
-  TablePlugin as Table,
-} from '@hoc/components'
+import { List, Label, Table } from '@hoc/components'
 import { CommonModel, ensureLocalRecord,
-  LocalTableName, OneRowOnlyMessage, InsufficientDataMessage, SubmittedTitle,
+  LocalTableName, OneRowOnlyMessage, InsufficientDataMessage,
+  SubmittedTitle, SubmittedMessage, BadEmailMessage, title,
 } from './common'
 
 export const AsketMode = plugin('AsketMode', CommonModel, {
@@ -37,10 +35,10 @@ export const AsketMode = plugin('AsketMode', CommonModel, {
     'deleteExcessiveLocalRecords',
   ], [
     () => self.submitValue,
-    () => self.submit(),
+    submitValue => self.submit(),
     'submit',
   ], [
-    () => self.submittedRecord,
+    () => self.submittedRecord ? self.submittedRecord.column('status').value : '',
     () => self.setSubmitted(),
     'setSubmitted'
   ],
@@ -89,11 +87,20 @@ export const AsketMode = plugin('AsketMode', CommonModel, {
     }
   },
   submit () {
-    const { email, firstName, lastName, about, interestedIn }
+    const { email, FirstName, LastName, about, interestedIn }
       = self.localRecord.object()
-    if (email && firstName && lastName && about && interestedIn) {
-      if (self.insertRecord()) {
-
+    if (email && FirstName && LastName && about && interestedIn) {
+      if (!EmailValidator.validate(email)) {
+        self.showError(
+          self.submitButtonElement, BadEmailMessage,
+          { relativePos: 'bottom' }
+        )
+      } else if (self.insertRecord()) {
+        // use err tooltip to show request submitted
+        self.showError(
+          self.submitButtonElement, SubmittedMessage,
+          { relativePos: 'bottom' }
+        )
       }
     } else {
       self.showError(
@@ -103,15 +110,17 @@ export const AsketMode = plugin('AsketMode', CommonModel, {
     }
   },
   setSubmitted () {
-    if (self.submittedRecord) {
-      self.label.setText(SubmittedTitle)
-      // recreate table component since there are no action like table.setReadOnly
-      self.snapshot.items[1] = Table.create({
-        readOnly: true,
-        readOnlySchema: true, // no controls for renaming columns
-        readOnly: self.submittedRecord ? true : false,
-        id: ensureLocalRecord().table.id,
-      })
-    }
+    const submitted = (
+      self.submittedRecord &&
+      self.submittedRecord.column('status').value === 'submitted'
+    )
+    self.label.setText(submitted ? SubmittedTitle : title)
+    // recreate table ui with read only flag,
+    // since there is no action like table.setReadOnly
+    self.snapshot.items[1] = Table.create({
+      readOnly: submitted ? true : false,
+      readOnlySchema: true, // no controls for renaming columns
+      id: ensureLocalRecord().table.id,
+    })
   },
 }))

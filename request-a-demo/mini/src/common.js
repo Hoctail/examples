@@ -1,4 +1,5 @@
 import { rootModel, RecordSafeReference } from '@hoc/models'
+import { CellInputSelectSettings } from '@hoc/components'
 import { types } from 'mobx-state-tree'
 
 export const title = 'Request a demo'
@@ -8,6 +9,13 @@ export const SubmittedTitle = 'Request submitted!'
 export const SubmittedMessage = 'Request submitted!'
 export const OneRowOnlyMessage = 'Only one row is allowed!'
 export const InsufficientDataMessage = 'More fields required to input'
+export const BadEmailMessage = 'Bad E-mail'
+
+export const inputOpt = {
+  ui: 'UI applications',
+  server: 'Server applications',
+  both: 'Both: server & UI',
+}
 
 export function getSubmittedRecord () {
   const table = rootModel().system.schema.table(DemoRequestsTableName)
@@ -19,6 +27,7 @@ export function getSubmittedRecord () {
 /**
  * Creating local table with the same columns as server table has.
  * Storage type like types.Json doesn't matter since it's just local.
+ * Note: All the operations are permitted in local schema.
 */
 export function ensureLocalRecord () {
   const submittedRecord = getSubmittedRecord()
@@ -29,12 +38,16 @@ export function ensureLocalRecord () {
     const { Json } = store.types
     table = schema.addTable(LocalTableName)
     table.addColumn(Json, { name: 'email', type: 'email', key: true })
-    table.addColumn(Json, { name: 'firstName', type: 'singleLine' })
-    table.addColumn(Json, { name: 'lastName', type: 'singleLine' })
+    table.addColumn(Json, { name: 'FirstName', type: 'singleLine' })
+    table.addColumn(Json, { name: 'LastName', type: 'singleLine' })
     table.addColumn(Json, { name: 'about', type: 'multiLine' })
-    table.addColumn(Json, { name: 'interestedIn', type: 'singleLine' })
-    table.addColumn(Json, { name: 'status', uiDataType: 'singleLine' })
+    const col = table.addColumn(Json, { name: 'interestedIn', type: 'selectItems' })
     table.addColumn(Json, { name: 'submit', uiDataType: 'action' })
+
+    const inputSelectSettings = CellInputSelectSettings.create({ col: col.id })
+    inputSelectSettings.addSelectItem(inputOpt.ui)
+    inputSelectSettings.addSelectItem(inputOpt.server)
+    inputSelectSettings.addSelectItem(inputOpt.both)
   }
   let record
   if (!table.records.size) {
@@ -83,7 +96,7 @@ export const CommonModel = types.model('CommonModel', {
     return self.localRecord
   },
   insertRecord () {
-    const { status, submit, ...data } = self.localRecord.object()
+    const { submit, ...data } = self.localRecord.object()
     if (!self.table) {
       throw new Error(`Didn't locate table: '${DemoRequestsTableName}'`)
     }

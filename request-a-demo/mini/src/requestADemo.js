@@ -1,18 +1,11 @@
 import { plugin, typePlugin, cssWrapper } from '@hoc/plugins-core'
 import { rootModel } from '@hoc/models'
 import {
-  CustomFormPlugin as CustomForm,
-  CustomFormContentPlugin as CustomFormContent,
-  ButtonPlugin as Button,
-  InputPlugin as Input,
-  InputEmailPlugin as InputEmail,
-  TextAreaPlugin as TextArea,
-  InputSelectPlugin as InputSelect,
-  ListPlugin as List,
-  formInputParams,
-  createSelectItemColoredText
+  CustomForm, CustomFormContent, Button, Input, InputEmail,
+  TextArea, InputSelect, List, RouterLink, Label,
+  formInputParams, createSelectItemColoredText
 } from '@hoc/components'
-import { title, SubmittedTitle, SubmittedMessage, CommonModel } from './common'
+import { title, SubmittedTitle, SubmittedMessage, CommonModel, inputOpt } from './common'
 
 function formInstance () {
   return CustomForm.create({
@@ -22,7 +15,7 @@ function formInstance () {
       outerCss: cssWrapper``,
       innerCss: cssWrapper`width: 18rem;`,
       fields: {
-	      firstName: {
+	      FirstName: {
           required: true,
           displayName: 'First Name',
           input: Input.create({
@@ -30,7 +23,7 @@ function formInstance () {
             autoFocus: true,
           }),
         },
-	      lastName: {
+	      LastName: {
           required: true,
           displayName: 'Last Name',
           input: Input.create({
@@ -40,7 +33,7 @@ function formInstance () {
         },	
 	      email: {
           required: true,
-          displayName: 'Email',
+          displayName: 'E-mail',
           input: InputEmail.create({
             ...formInputParams(),
             autoFocus: false,
@@ -66,17 +59,17 @@ function formInstance () {
                   onClick: 'RequestADemo.HandleSelectInputItem',
                 },
               }),
-              createSelectItemColoredText('UI applications', null, { bgcolor: 'blue' }, {
+              createSelectItemColoredText(inputOpt.ui, null, { bgcolor: 'blue' }, {
                 events: {
                   onClick: 'RequestADemo.HandleSelectInputItem',
                 },
               }),
-              createSelectItemColoredText('Server applications', null, { bgcolor: 'blue' }, {
+              createSelectItemColoredText(inputOpt.server, null, { bgcolor: 'blue' }, {
                 events: {
                   onClick: 'RequestADemo.HandleSelectInputItem',
                 },
               }),
-              createSelectItemColoredText('Both: server & UI', null, { bgcolor: 'blue' }, {
+              createSelectItemColoredText(inputOpt.both, null, { bgcolor: 'blue' }, {
                 events: {
                   onClick: 'RequestADemo.HandleSelectInputItem',
                 },
@@ -160,6 +153,7 @@ export const RequestADemo = plugin('RequestADemo', CommonModel, {
     )
   },
   afterCreate () {
+    self.addAsketModeLink()
     self.ensureLocalRecord()
     self.form.dialog.closeButton.setVisible(false)
     self.setTitle()
@@ -175,6 +169,27 @@ export const RequestADemo = plugin('RequestADemo', CommonModel, {
       }
     })
     self.form.show()
+  },
+  addAsketModeLink () {
+    // Just insert our link to a right place of a model
+    self.form.dialog.portal.content.items[0].addListItem(RouterLink.create({
+      route: 'Asket View',
+      item: Label.create({
+        text: 'Switch to Asket View',
+        style: 'italic',
+        color: 'blue',
+        size: 'small',
+        innerCss: cssWrapper`
+          padding: 0.5rem;
+          cursor: pointer;
+        `,
+      }),
+      outerCss: cssWrapper`
+        display: flex;
+        justify-content: flex-end;
+        order: -1;
+      `,
+    }))
   },
   handleOkButtonVisibility () {
     const enable = !self.form.error
