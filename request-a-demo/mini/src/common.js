@@ -1,5 +1,5 @@
 import { rootModel, RecordSafeReference } from '@hoc/models'
-import { CellInputSelectSettings } from '@hoc/components'
+import { CellInputSelectSettings, CellActionSettings } from '@hoc/components'
 import { types } from 'mobx-state-tree'
 
 export const title = 'Request a demo'
@@ -41,13 +41,15 @@ export function ensureLocalRecord () {
     table.addColumn(Json, { name: 'FirstName', type: 'singleLine' })
     table.addColumn(Json, { name: 'LastName', type: 'singleLine' })
     table.addColumn(Json, { name: 'about', type: 'multiLine' })
-    const col = table.addColumn(Json, { name: 'interestedIn', type: 'selectItems' })
-    table.addColumn(Json, { name: 'submit', uiDataType: 'action' })
+    const interestCol = table.addColumn(Json, { name: 'interestedIn', type: 'selectItems' })
+    const submitCol = table.addColumn(Json, { name: 'submit', uiDataType: 'action' })
 
-    const inputSelectSettings = CellInputSelectSettings.create({ col: col.id })
+    const inputSelectSettings = CellInputSelectSettings.create({ col: interestCol.id })
     inputSelectSettings.addSelectItem(inputOpt.ui)
     inputSelectSettings.addSelectItem(inputOpt.server)
     inputSelectSettings.addSelectItem(inputOpt.both)
+    const submitCellButtonSettings = CellActionSettings.create({ col: submitCol.id })
+    submitCellButtonSettings.setTimeagoTooltipShow(false)
   }
   let record
   if (!table.records.size) {

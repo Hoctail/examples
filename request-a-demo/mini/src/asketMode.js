@@ -95,6 +95,11 @@ export const AsketMode = plugin('AsketMode', CommonModel, {
           self.submitButtonElement, BadEmailMessage,
           { relativePos: 'bottom' }
         )
+      } else if (interestedIn === 'Select an option') {
+        self.showError(
+          self.submitButtonElement, InsufficientDataMessage,
+          { relativePos: 'bottom' }
+        )
       } else if (self.insertRecord()) {
         // use err tooltip to show request submitted
         self.showError(
