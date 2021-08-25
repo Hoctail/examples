@@ -21,10 +21,10 @@ await hoctail.stx(({ store, types }) => {
     })
   }
 
-  table.setVisibleToOthers(true)
-  table.setAllowOthersToInsert(true)
-  schema.table('metadata').setVisibleToOthers(true)
-  schema.table('metadata').setAllowOthersToSelect(true)
+  table.group('anon').setVisible(true)
+  table.group('anon').setAllowInsert(true)
+  schema.table('metadata').group('anon').setVisible(true)
+  schema.table('metadata').group('anon').setAllowSelect(true)
 
   // using before trigger to be able altering a data
   table.setAction(inserted_updated, { when: 'before', op: ['insert', 'update', 'delete'] })

@@ -89,15 +89,10 @@ export const AsketMode = plugin('AsketMode', CommonModel, {
   submit () {
     const { email, FirstName, LastName, about, interestedIn }
       = self.localRecord.object()
-    if (email && FirstName && LastName && about && interestedIn) {
+    if (email && FirstName && LastName && about && interestedIn && interestedIn !== 'Select an option') {
       if (!EmailValidator.validate(email)) {
         self.showError(
           self.submitButtonElement, BadEmailMessage,
-          { relativePos: 'bottom' }
-        )
-      } else if (interestedIn === 'Select an option') {
-        self.showError(
-          self.submitButtonElement, InsufficientDataMessage,
           { relativePos: 'bottom' }
         )
       } else if (self.insertRecord()) {

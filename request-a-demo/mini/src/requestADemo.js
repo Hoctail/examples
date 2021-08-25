@@ -5,7 +5,10 @@ import {
   TextArea, InputSelect, List, RouterLink, Label,
   formInputParams, createSelectItemColoredText
 } from '@hoc/components'
-import { title, SubmittedTitle, SubmittedMessage, CommonModel, inputOpt } from './common'
+import {
+  title, SubmittedTitle, SubmittedMessage, SwitchToAsketMode,
+  CommonModel, inputOpt,
+} from './common'
 
 function formInstance () {
   return CustomForm.create({
@@ -175,7 +178,7 @@ export const RequestADemo = plugin('RequestADemo', CommonModel, {
     self.form.dialog.portal.content.items[0].addListItem(RouterLink.create({
       route: 'Asket View',
       item: Label.create({
-        text: 'Switch to Asket View',
+        text: SwitchToAsketMode,
         style: 'italic',
         color: 'blue',
         size: 'small',

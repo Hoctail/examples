@@ -22,4 +22,8 @@ HOCTAIL_APP=Request A Demo
 ### Additionally check your submit
 From browser's console you can check your record is submitted in two ways:
 * `Array.from(store.system.schema.table('Requests').records.values()).map(r => r.object())`
-* `await hoctail.query(`select * from "${store.system.schema.table('Requests').id}"`)`
+* ``` js
+  store.system.schema.table('Requests').mapQueryResults(
+    await hoctail.query(`select * from "${store.system.schema.table('Requests').id}"`),
+  )
+  ```

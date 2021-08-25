@@ -10,6 +10,7 @@ export const SubmittedMessage = 'Request submitted!'
 export const OneRowOnlyMessage = 'Only one row is allowed!'
 export const InsufficientDataMessage = 'More fields required to input'
 export const BadEmailMessage = 'Bad E-mail'
+export const SwitchToAsketMode = 'Switch to "Asket View"'
 
 export const inputOpt = {
   ui: 'UI applications',
