@@ -1,13 +1,9 @@
-*Request a demo* application has to be installed into a Mini app user creates on a Hoctail platform. App contains:
-* Public Mini app
+## This real-life example of application for Hoctail platform contains:
 * Form View widget
 * Asket View extra widget
 * Deploy script for creating table, trigger, etc.
 
-### First of all Request a demo:
-Use a link [demo.hoctail.io/demo/requests](demo.hoctail.io/demo/requests) to get a ride!
-
-### Steps:
+### Installation steps:
 * Register on demo.hoctail.io for free, create Api Key, Create `Request A Demo` app of a **Mini** type.
 * Create project's folder and add `.env ` file. Mine is:
 ```
@@ -18,6 +14,10 @@ HOCTAIL_APP=Request A Demo
   1. `yarn` or `npm i`
   1. `hoctail deploy.js`
   1. `hoctail mini .`
+
+
+### Request a demo if you are not a registered user yet:
+Use a link [demo.hoctail.io/demo/request](demo.hoctail.io/demo/requests) to get a ride!
 
 ### Additionally check your submit
 From browser's console you can check your record is submitted in two ways:
