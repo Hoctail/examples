@@ -1,0 +1,11 @@
+{
+  "name": "request-a-demo",
+  "version": "1.0.0",
+  "main": "index.js",
+  "author": "Hoctail",
+  "license": "MIT",
+  "private": false,
+  "dependencies": {
+    "email-validator": "^2.0.4"
+  }
+}
